@@ -1,0 +1,2 @@
+- Check for a progress.md file to understand what is happening with the project so far and remember to update it after you make major changes
+- Don't say you've "fixed" anything before you hear back from me that the fix you implemented has actually worked. Assume that more often than not, your fixes may not work on the first try, but don't get discouraged and seek information from me to help you actually get a fix done right
