@@ -467,9 +467,11 @@ class TesterWindow(QMainWindow):
         # Integration Key
         config_row.addWidget(QLabel("Integration Key:"))
         self.key_edit = QLineEdit(self.cfg.get("integration_key", ""))
-        self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_edit.setMinimumWidth(300)
         config_row.addWidget(self.key_edit)
+        
+        # Connect API key changes to payload updates
+        self.key_edit.textChanged.connect(self.on_api_key_changed)
 
         # Removed Test Connection button
         config_row.addStretch(1)
@@ -581,6 +583,8 @@ class TesterWindow(QMainWindow):
         # Use enhanced JSON editor for response
         self.response_edit = JSONTextEdit()
         self.response_edit.setReadOnly(True)
+        # Enable text wrapping for better readability of long responses
+        self.response_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         right_box.addWidget(self.response_edit, stretch=1)
 
         # Set splitter proportions (60% left, 40% right)
@@ -639,8 +643,8 @@ class TesterWindow(QMainWindow):
         profile and any unsaved edits in the card form fields. If a custom
         payload exists for the selected card we respect all of its keys and
         simply override the nested `payment.card` block so that card edits are
-        always mirrored. This keeps the payload display and the card form in
-        lock-step.
+        always mirrored. The API key is always taken from the UI field as the
+        single source of truth.
         """
 
         if self._syncing:
@@ -663,6 +667,8 @@ class TesterWindow(QMainWindow):
             payload = copy.deepcopy(card["custom_payload"])
             try:
                 payload["payment"]["card"].update(ui_card)
+                # Always use the current API key from UI, never from saved payload
+                payload["integration_key"] = self.key_edit.text() or "{integration_key}"
             except (KeyError, TypeError):
                 # Fallback to rebuilding if structure is unexpected
                 payload = self.build_payload(country, ui_card, customer)
@@ -683,13 +689,21 @@ class TesterWindow(QMainWindow):
             return
         self.update_payload_preview()
 
+    def on_api_key_changed(self):
+        """Called when the API key field changes - update payload and save config."""
+        if self._syncing:
+            return
+        self.update_payload_preview()
+        self._persist_settings()
+
     def on_payload_changed(self):
-        """Keep card form fields in sync when the payload editor changes.
+        """Keep card form fields and API key in sync when the payload editor changes.
 
         We attempt to parse the JSON on each change. On valid JSON we extract
-        the card block and update form fields. This direction-of-sync ensures
+        the card block and update form fields. We also sync the integration_key
+        from the payload to the UI field. This direction-of-sync ensures
         that manual edits in the JSON view are reflected back in the card
-        selector UI.
+        selector UI and API key field.
         """
         if self._syncing:
             return
@@ -698,14 +712,22 @@ class TesterWindow(QMainWindow):
         if not data:
             return  # Invalid / incomplete JSON – ignore until valid
 
+        self._syncing = True
+        
+        # Update card form fields
         try:
             card_data = data["payment"]["card"]
+            for fld, key in zip(self.card_fields, ["card_number", "card_name", "card_due_date", "card_cvv"]):
+                fld.setText(str(card_data.get(key, "")))
         except (KeyError, TypeError):
-            return  # Structure not as expected
-
-        self._syncing = True
-        for fld, key in zip(self.card_fields, ["card_number", "card_name", "card_due_date", "card_cvv"]):
-            fld.setText(str(card_data.get(key, "")))
+            pass  # Card data not available or structure unexpected
+        
+        # Update API key field if present in payload
+        if "integration_key" in data:
+            api_key = data["integration_key"]
+            if api_key and api_key != "{integration_key}":
+                self.key_edit.setText(str(api_key))
+        
         self._syncing = False
 
     def format_payload_json(self):
@@ -773,9 +795,14 @@ class TesterWindow(QMainWindow):
             QMessageBox.critical(self, "Invalid JSON", "Payload contains invalid JSON.")
             return
 
+        # Remove the integration_key from the payload before saving
+        # since it should always come from the UI field
+        if "integration_key" in payload_data:
+            del payload_data["integration_key"]
+
         card["custom_payload"] = payload_data
         self._write_cards_file()
-        QMessageBox.information(self, "Saved", "Payload saved as part of card profile.")
+        QMessageBox.information(self, "Saved", "Payload saved as part of card profile (API key excluded).")
 
     def run_test(self):
         self.logger.info("Starting API test")
