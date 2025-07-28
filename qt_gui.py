@@ -48,6 +48,50 @@ from PySide6.QtWidgets import (
 from config_util import load_config, save_config
 
 # ---------------------------------------------------------------------------
+# Logging System
+# ---------------------------------------------------------------------------
+import logging
+from logging.handlers import RotatingFileHandler
+
+def setup_logging():
+    """Setup comprehensive logging system for the application."""
+    # Create logs directory if it doesn't exist
+    os.makedirs('logs', exist_ok=True)
+    
+    # Create logger
+    logger = logging.getLogger('EBANXTester')
+    logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
+    logger.handlers.clear()
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # File handler with daily rotation
+    today = datetime.now().strftime('%Y%m%d')
+    file_handler = RotatingFileHandler(
+        f'logs/ebanx_tester_{today}.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+# ---------------------------------------------------------------------------
 # JSON Syntax Highlighter
 # ---------------------------------------------------------------------------
 class JSONHighlighter(QSyntaxHighlighter):
@@ -222,9 +266,149 @@ DATA_DIR = os.path.join(ROOT, "data")
 CARDS_FILE = os.path.join(DATA_DIR, "test-cards.json")
 PTP_FILE = os.path.join(DATA_DIR, "ptp-list.txt")
 
+def create_dummy_test_data():
+    """Create dummy test data for first-time users."""
+    return {
+        "NG": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+ng@ebanx.com",
+                "phone_number": "+2348089895495",
+                "birth_date": "01/01/1990",
+                "country": "ng",
+                "currency_code": "NGN",
+                "default_amount": 100
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "NG - Test Visa Card - NGN",
+                        "custom_payload": {
+                            "integration_key": "{integration_key}",
+                            "operation": "request",
+                            "payment": {
+                                "amount_total": 100,
+                                "currency_code": "NGN",
+                                "name": "Test User",
+                                "email": "test+ng@ebanx.com",
+                                "birth_date": "01/01/1990",
+                                "country": "ng",
+                                "phone_number": "+2348089895495",
+                                "card": {
+                                    "card_number": "4111111111111111",
+                                    "card_name": "Test User",
+                                    "card_due_date": "12/2025",
+                                    "card_cvv": "123",
+                                    "auto_capture": True,
+                                    "threeds_force": False
+                                }
+                            }
+                        }
+                    }
+                ],
+                "mastercard": [
+                    {
+                        "card_number": "5555555555554444",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "NG - Test Mastercard - NGN"
+                    }
+                ]
+            }
+        },
+        "KE": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+ke@ebanx.com",
+                "phone_number": "+254708663158",
+                "birth_date": "01/01/1990",
+                "country": "ke",
+                "currency_code": "KES",
+                "default_amount": 75
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "KE - Test Visa Card - KES"
+                    }
+                ]
+            },
+            "mobile_money": {
+                "mpesa": {
+                    "phone_number": "254708663158",
+                    "description": "KE - MPESA Test Number"
+                }
+            }
+        },
+        "ZA": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+za@ebanx.com",
+                "phone_number": "+27123456789",
+                "birth_date": "01/01/1990",
+                "country": "za",
+                "currency_code": "ZAR",
+                "default_amount": 10
+            },
+            "debitcard": {
+                "mastercard": [
+                    {
+                        "card_number": "5555555555554444",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "ZA - Test Mastercard - ZAR"
+                    }
+                ]
+            }
+        },
+        "EG": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+eg@ebanx.com",
+                "phone_number": "+201234567890",
+                "birth_date": "01/01/1990",
+                "country": "eg",
+                "currency_code": "EGP",
+                "default_amount": 50
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "EG - Test Visa Card - EGP"
+                    }
+                ]
+            }
+        }
+    }
+
 def load_json(path: str):
     if not os.path.exists(path):
-        raise FileNotFoundError(path)
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        # If this is the test-cards.json file, create it with dummy data
+        if path.endswith("test-cards.json"):
+            dummy_data = create_dummy_test_data()
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(dummy_data, fh, indent=2)
+            return dummy_data
+        else:
+            raise FileNotFoundError(path)
+    
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -243,10 +427,17 @@ class TesterWindow(QMainWindow):
         self.setWindowTitle("EBANX PTP Tester – Qt Edition")
         self.resize(1400, 900)  # Increased size for better layout
 
+        # Setup logging for this instance
+        self.logger = setup_logging()
+        self.logger.info("Initializing TesterWindow")
+
         try:
             self.test_data: Dict = load_json(CARDS_FILE)
+            self.logger.info(f"Loaded test data: {len(self.test_data)} countries")
             self.ptp_list: List[str] = load_lines(PTP_FILE)
+            self.logger.info(f"Loaded PTP list: {len(self.ptp_list)} profiles")
         except Exception as exc:
+            self.logger.error(f"Failed to load data: {exc}")
             QMessageBox.critical(self, "Data error", str(exc))
             raise SystemExit(1)
 
@@ -587,23 +778,29 @@ class TesterWindow(QMainWindow):
         QMessageBox.information(self, "Saved", "Payload saved as part of card profile.")
 
     def run_test(self):
+        self.logger.info("Starting API test")
+        
         country, card, customer = self.current_card_country_and_data()
         if not card:
+            self.logger.warning("No card selected for test")
             QMessageBox.warning(self, "No card", "Please select a card first")
             return
 
         ptp = self.ptp_combo.currentText()
         if not ptp:
+            self.logger.warning("No PTP selected for test")
             QMessageBox.warning(self, "No PTP", "Please select a PTP first")
             return
 
         if not self.key_edit.text():
+            self.logger.warning("No integration key provided")
             QMessageBox.warning(self, "No key", "Please enter Integration Key")
             return
 
         # Use the JSON currently in the payload editor as the request body
         payload_data = self.payload_edit.get_json_data()
         if payload_data is None:
+            self.logger.error("Invalid JSON payload")
             QMessageBox.critical(self, "Invalid JSON", "Payload JSON is invalid.")
             return
 
@@ -613,6 +810,10 @@ class TesterWindow(QMainWindow):
             "X-EBANX-Custom-Payment-Type-Profile": ptp,
         }
         url = f"{self.base_url_edit.text().rstrip('/')}/ws/direct"
+        
+        self.logger.info(f"Making API call to {url} with PTP: {ptp}")
+        self.logger.info(f"Card: {card.get('description', 'Unknown')}")
+        self.logger.info(f"Country: {country}")
 
         # ------------------------------------------------------------------
         # Observability – show the cURL command first
@@ -660,6 +861,8 @@ class TesterWindow(QMainWindow):
         self._api_thread.start()
 
     def _handle_api_response(self, resp):
+        self.logger.info(f"API response received: {resp.status_code} {resp.reason}")
+        
         # Append response header below the existing cURL preview so it's not lost
         self.response_edit.appendPlainText("\n" + self._latest_request_info)
         
@@ -667,12 +870,16 @@ class TesterWindow(QMainWindow):
         status_text = f"📊 Status: {resp.status_code} {resp.reason}\n"
         if resp.status_code >= 200 and resp.status_code < 300:
             status_text += "✅ Success\n"
+            self.logger.info("API call successful")
         elif resp.status_code >= 400 and resp.status_code < 500:
             status_text += "❌ Client Error\n"
+            self.logger.warning(f"API client error: {resp.status_code}")
         elif resp.status_code >= 500:
             status_text += "🔥 Server Error\n"
+            self.logger.error(f"API server error: {resp.status_code}")
         else:
             status_text += "⚠️  Other Status\n"
+            self.logger.warning(f"API unexpected status: {resp.status_code}")
         
         self.response_edit.appendPlainText(status_text)
         
@@ -689,6 +896,8 @@ class TesterWindow(QMainWindow):
         self._persist_settings()
 
     def _handle_api_error(self, error_msg: str):
+        self.logger.error(f"API call failed: {error_msg}")
+        
         # Append error information below preview
         self.response_edit.appendPlainText("\n" + self._latest_request_info)
         self.response_edit.appendPlainText(f"❌ Error: {error_msg}")
@@ -855,9 +1064,19 @@ class TesterWindow(QMainWindow):
 # ---------------------------------------------------------------------------
 
 def main():
+    # Setup logging
+    logger = setup_logging()
+    logger.info("Starting EBANX PTP Tester application")
+    
     app = QApplication(sys.argv)
+    logger.info("QApplication created")
+    
     w = TesterWindow()
+    logger.info("TesterWindow created")
+    
     w.show()
+    logger.info("Window displayed, entering event loop")
+    
     sys.exit(app.exec())
 
 if __name__ == "__main__":

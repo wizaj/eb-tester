@@ -20,6 +20,153 @@ def setup_simple_logging():
     )
     return logging.getLogger('DataTest')
 
+def create_dummy_test_data():
+    """Create dummy test data for first-time users."""
+    return {
+        "NG": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+ng@ebanx.com",
+                "phone_number": "+2348089895495",
+                "birth_date": "01/01/1990",
+                "country": "ng",
+                "currency_code": "NGN",
+                "default_amount": 100
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "NG - Test Visa Card - NGN",
+                        "custom_payload": {
+                            "integration_key": "{integration_key}",
+                            "operation": "request",
+                            "payment": {
+                                "amount_total": 100,
+                                "currency_code": "NGN",
+                                "name": "Test User",
+                                "email": "test+ng@ebanx.com",
+                                "birth_date": "01/01/1990",
+                                "country": "ng",
+                                "phone_number": "+2348089895495",
+                                "card": {
+                                    "card_number": "4111111111111111",
+                                    "card_name": "Test User",
+                                    "card_due_date": "12/2025",
+                                    "card_cvv": "123",
+                                    "auto_capture": True,
+                                    "threeds_force": False
+                                }
+                            }
+                        }
+                    }
+                ],
+                "mastercard": [
+                    {
+                        "card_number": "5555555555554444",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "NG - Test Mastercard - NGN"
+                    }
+                ]
+            }
+        },
+        "KE": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+ke@ebanx.com",
+                "phone_number": "+254708663158",
+                "birth_date": "01/01/1990",
+                "country": "ke",
+                "currency_code": "KES",
+                "default_amount": 75
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "KE - Test Visa Card - KES"
+                    }
+                ]
+            },
+            "mobile_money": {
+                "mpesa": {
+                    "phone_number": "254708663158",
+                    "description": "KE - MPESA Test Number"
+                }
+            }
+        },
+        "ZA": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+za@ebanx.com",
+                "phone_number": "+27123456789",
+                "birth_date": "01/01/1990",
+                "country": "za",
+                "currency_code": "ZAR",
+                "default_amount": 10
+            },
+            "debitcard": {
+                "mastercard": [
+                    {
+                        "card_number": "5555555555554444",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "ZA - Test Mastercard - ZAR"
+                    }
+                ]
+            }
+        },
+        "EG": {
+            "customer_data": {
+                "name": "Test User",
+                "email": "test+eg@ebanx.com",
+                "phone_number": "+201234567890",
+                "birth_date": "01/01/1990",
+                "country": "eg",
+                "currency_code": "EGP",
+                "default_amount": 50
+            },
+            "debitcard": {
+                "visa": [
+                    {
+                        "card_number": "4111111111111111",
+                        "card_name": "Test User",
+                        "card_due_date": "12/2025",
+                        "card_cvv": "123",
+                        "description": "EG - Test Visa Card - EGP"
+                    }
+                ]
+            }
+        }
+    }
+
+def load_json(path: str):
+    """Load JSON file, creating dummy data if test-cards.json doesn't exist."""
+    if not os.path.exists(path):
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        # If this is the test-cards.json file, create it with dummy data
+        if path.endswith("test-cards.json"):
+            dummy_data = create_dummy_test_data()
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(dummy_data, fh, indent=2)
+            return dummy_data
+        else:
+            raise FileNotFoundError(path)
+    
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
 def test_data_loading():
     logger = setup_simple_logging()
     logger.info("Starting data loading test...")
@@ -27,8 +174,7 @@ def test_data_loading():
     # Test test-cards.json loading
     logger.info("Testing test-cards.json loading...")
     try:
-        with open('data/test-cards.json', 'r') as f:
-            test_data = json.load(f)
+        test_data = load_json('data/test-cards.json')
         
         countries = list(test_data.keys())
         total_cards = sum(
@@ -81,7 +227,7 @@ def test_logging_system():
     
     try:
         # Import our logging setup
-        from gui.main_window import setup_logging
+        from qt_gui import setup_logging
         
         app_logger = setup_logging()
         app_logger.info("Application logging system test")
