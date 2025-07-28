@@ -219,7 +219,7 @@ class APICallWorker(QObject):
 ROOT = os.path.dirname(__file__)
 DATA_DIR = os.path.join(ROOT, "data")
 
-CARDS_FILE = os.path.join(DATA_DIR, "test_cards.json")
+CARDS_FILE = os.path.join(DATA_DIR, "test-cards.json")
 PTP_FILE = os.path.join(DATA_DIR, "ptp-list.txt")
 
 def load_json(path: str):

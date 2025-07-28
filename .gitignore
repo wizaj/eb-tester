@@ -51,7 +51,7 @@ logs/
 *.log
 
 # Sensitive test data
-data/test_cards.json
+data/test-cards.json
 config/api_keys.json
 
 # Test results

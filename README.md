@@ -70,7 +70,7 @@ Each test card can have custom JSON payloads that override the default payment s
 eb-tester/
 ├── data/
 │   ├── ptp-list.txt          # Payment Type Profile definitions
-│   └── test_cards.json       # Test card data (gitignored)
+│   └── test-cards.json       # Test card data (gitignored)
 ├── logs/                     # Daily rotating log files
 ├── src/
 │   └── gui/                  # GUI components
@@ -109,7 +109,7 @@ The tool supports various Payment Type Profiles across multiple countries:
 
 ### Test Data
 
-Test cards are stored in `data/test_cards.json` (excluded from version control for security). The file contains:
+Test cards are stored in `data/test-cards.json` (excluded from version control for security). The file contains:
 - Customer data (name, email, phone, currency) per country
 - Test cards organized by country and card type
 - Mobile money test data (MPESA for Kenya)
@@ -152,7 +152,7 @@ python3 test_data_only.py
 
 1. **GUI Display Issues**: If the interface appears broken, try restarting the application
 2. **API Connection Errors**: Verify your base URL and integration key
-3. **Card Loading Issues**: Check that `data/test_cards.json` exists and is valid JSON
+3. **Card Loading Issues**: Check that `data/test-cards.json` exists and is valid JSON
 
 ### Debug Mode
 

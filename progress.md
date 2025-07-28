@@ -11,7 +11,7 @@ Python-based GUI application for testing payment methods across multiple Payment
 - [x] Create requirements.txt with dependencies
 - [x] Set up project structure with src/gui/
 - [x] Basic GUI framework with two-panel layout
-- [x] Data loading (test_cards.json, ptp-list.txt)
+- [x] Data loading (test-cards.json, ptp-list.txt)
 
 ### **✅ COMPLETED - Card Testing Interface**
 - [x] Card selector dropdown with search
@@ -81,7 +81,7 @@ ebanx-ptp-tester/
 ├── data/
 │   ├── ptp-list.txt ✅
 │   ├── postman.json ✅
-│   └── test_cards.json ✅ (gitignored)
+│   └── test-cards.json ✅ (gitignored)
 ├── run.py ✅ (Primary GUI using Qt)
 ├── test_data_only.py ✅ (headless logic test)
 ├── requirements.txt ✅
@@ -90,7 +90,7 @@ ebanx-ptp-tester/
 ```
 
 ### Test Data File
-- **test_cards.json** - Contains all test data organized by country (gitignored for security)
+- **test-cards.json** - Contains all test data organized by country (gitignored for security)
 
 This file contains sensitive test data and is excluded from version control. The structure includes:
 - Customer data (name, email, phone, currency) per country
@@ -115,7 +115,7 @@ From ptp-list.txt analysis:
 The application now has a fully functional Qt-based GUI (`run.py`). The previous Tkinter implementation has been removed, resolving macOS display issues.
 
 ## Recent Updates
-- **✅ Added ZA Test Card**: South Africa Mastercard (5274600000493614) added to test_cards.json with proper ZAR currency and customer data
+- **✅ Added ZA Test Card**: South Africa Mastercard (5274600000493614) added to test-cards.json with proper ZAR currency and customer data
 - **✅ Data Validation**: Confirmed JSON syntax is valid and test data loads correctly (5 total cards across 4 countries)
 - **🔄 Unified State Management**: Card form fields and JSON payload are now bi-directionally synced. Editing card details updates the payload automatically, and modifying the payload JSON updates the card form in real-time.
 - **🔍 PTP Filter Added**: Introduced a filter textbox above the PTP dropdown to quickly narrow down profiles.

@@ -24,10 +24,10 @@ def test_data_loading():
     logger = setup_simple_logging()
     logger.info("Starting data loading test...")
     
-    # Test test_cards.json loading
-    logger.info("Testing test_cards.json loading...")
+    # Test test-cards.json loading
+    logger.info("Testing test-cards.json loading...")
     try:
-        with open('data/test_cards.json', 'r') as f:
+        with open('data/test-cards.json', 'r') as f:
             test_data = json.load(f)
         
         countries = list(test_data.keys())
@@ -54,7 +54,7 @@ def test_data_loading():
         logger.info(f"First 3 cards: {cards[:3]}")
         
     except Exception as e:
-        logger.error(f"❌ Error loading test_cards.json: {e}")
+        logger.error(f"❌ Error loading test-cards.json: {e}")
         return False
     
     # Test PTP list loading
