@@ -56,8 +56,12 @@ from logging.handlers import RotatingFileHandler
 
 def setup_logging():
     """Setup comprehensive logging system for the application."""
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    logs_dir = os.path.join(script_dir, 'logs')
+    
     # Create logs directory if it doesn't exist
-    os.makedirs('logs', exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
     
     # Create logger
     logger = logging.getLogger('EBANXTester')
@@ -73,8 +77,9 @@ def setup_logging():
     
     # File handler with daily rotation
     today = datetime.now().strftime('%Y%m%d')
+    log_file_path = os.path.join(logs_dir, f'ebanx_tester_{today}.log')
     file_handler = RotatingFileHandler(
-        f'logs/ebanx_tester_{today}.log',
+        log_file_path,
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5
     )
