@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QPlainTextEdit,  # NEW: Better for code display
     QSplitter,       # NEW: For resizable panels
+    QCheckBox,      # NEW: For soft descriptor checkbox
 )
 
 # Persistent config helper
@@ -473,6 +474,22 @@ class TesterWindow(QMainWindow):
         # Connect API key changes to payload updates
         self.key_edit.textChanged.connect(self.on_api_key_changed)
 
+        # Soft Descriptor
+        config_row.addWidget(QLabel("Soft Descriptor:"))
+        self.soft_descriptor_edit = QLineEdit(self.cfg.get("soft_descriptor", ""))
+        self.soft_descriptor_edit.setMinimumWidth(200)
+        self.soft_descriptor_edit.setPlaceholderText("Enter soft descriptor...")
+        config_row.addWidget(self.soft_descriptor_edit)
+        
+        # Soft Descriptor Checkbox
+        self.soft_descriptor_checkbox = QCheckBox("Use Soft Descriptor")
+        self.soft_descriptor_checkbox.setChecked(self.cfg.get("use_soft_descriptor", False))
+        config_row.addWidget(self.soft_descriptor_checkbox)
+        
+        # Connect soft descriptor changes to payload updates
+        self.soft_descriptor_edit.textChanged.connect(self.on_soft_descriptor_changed)
+        self.soft_descriptor_checkbox.toggled.connect(self.on_soft_descriptor_changed)
+
         # Removed Test Connection button
         config_row.addStretch(1)
 
@@ -669,6 +686,13 @@ class TesterWindow(QMainWindow):
                 payload["payment"]["card"].update(ui_card)
                 # Always use the current API key from UI, never from saved payload
                 payload["integration_key"] = self.key_edit.text() or "{integration_key}"
+                
+                # Handle soft descriptor in card object
+                if self.soft_descriptor_checkbox.isChecked() and self.soft_descriptor_edit.text().strip():
+                    payload["payment"]["card"]["soft_descriptor"] = self.soft_descriptor_edit.text().strip()
+                elif "soft_descriptor" in payload["payment"]["card"]:
+                    # Remove soft descriptor if checkbox is unchecked
+                    del payload["payment"]["card"]["soft_descriptor"]
             except (KeyError, TypeError):
                 # Fallback to rebuilding if structure is unexpected
                 payload = self.build_payload(country, ui_card, customer)
@@ -691,6 +715,13 @@ class TesterWindow(QMainWindow):
 
     def on_api_key_changed(self):
         """Called when the API key field changes - update payload and save config."""
+        if self._syncing:
+            return
+        self.update_payload_preview()
+        self._persist_settings()
+
+    def on_soft_descriptor_changed(self):
+        """Called when the soft descriptor field or checkbox changes - update payload and save config."""
         if self._syncing:
             return
         self.update_payload_preview()
@@ -728,6 +759,17 @@ class TesterWindow(QMainWindow):
             if api_key and api_key != "{integration_key}":
                 self.key_edit.setText(str(api_key))
         
+        # Update soft descriptor settings from payload
+        try:
+            card_data = data["payment"]["card"]
+            if "soft_descriptor" in card_data:
+                self.soft_descriptor_edit.setText(str(card_data["soft_descriptor"]))
+                self.soft_descriptor_checkbox.setChecked(True)
+            else:
+                self.soft_descriptor_checkbox.setChecked(False)
+        except (KeyError, TypeError):
+            pass  # Card data not available or structure unexpected
+        
         self._syncing = False
 
     def format_payload_json(self):
@@ -745,7 +787,7 @@ class TesterWindow(QMainWindow):
     # API interaction
     # ------------------------------------------------------------------
     def build_payload(self, country: str, card: Dict, customer: Dict):
-        return {
+        payload = {
             "integration_key": self.key_edit.text() or "{integration_key}",
             "operation": "request",
             "payment": {
@@ -766,6 +808,12 @@ class TesterWindow(QMainWindow):
                 },
             },
         }
+
+        # Add soft descriptor to card object if checkbox is checked
+        if self.soft_descriptor_checkbox.isChecked() and self.soft_descriptor_edit.text().strip():
+            payload["payment"]["card"]["soft_descriptor"] = self.soft_descriptor_edit.text().strip()
+
+        return payload
 
     def _build_curl_command(self, url: str, ptp: str, payload) -> str:
         """Return a formatted multi-line cURL command for debugging purposes."""
@@ -964,6 +1012,8 @@ class TesterWindow(QMainWindow):
         save_config({
             "integration_key": self.key_edit.text(),
             "base_url": self.base_url_edit.text(),
+            "soft_descriptor": self.soft_descriptor_edit.text(),
+            "use_soft_descriptor": self.soft_descriptor_checkbox.isChecked(),
         })
 
     def _find_card_path(self, target_card):
