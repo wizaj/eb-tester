@@ -139,8 +139,21 @@ The application now has a fully functional Qt-based GUI (`run.py`) with both Non
   - **📊 Dual Payload Support**: Updated data structure to support both `custom_payload` (Non-3DS) and `custom_payload_3ds` (3DS) fields in test-cards.json
   - **🔄 Tab-Specific Payloads**: App now uses the appropriate payload based on active tab - Non-3DS tab uses `custom_payload`, 3DS tab uses `custom_payload_3ds`
   - **🔐 3DS Authentication Integration**: Added "Authenticate 3DS in Browser" button in the 3DS tab that automatically detects 3DS redirect URLs in API responses and opens them in the user's default browser
-  - **💾 PTP Selection Memory**: App now remembers the last selected PTP for each tab (Non-3DS and 3DS) and restores them on startup
-  - **💳 Card Selection Memory**: App now remembers the last selected card for each tab and restores them on startup
+  - **💾 PTP Selection Memory**: App now remembers the last selected PTP for each tab (Non-3DS, 3DS, and APMs) and restores them on startup
+- **💳 Card Selection Memory**: App now remembers the last selected card for each tab and restores them on startup
+- **💳 APMs Implementation (2024-12-19)**: Implemented full APM (Alternative Payment Methods) functionality with dedicated tab:
+  - **📁 APM Data Management**: New `test-apms.json` file with structured APM data organized by country → payment method → profile name
+  - **🔄 APM Profile Management**: Complete CRUD operations for APM profiles (Create, Read, Update, Delete)
+  - **📋 Dynamic Form Fields**: Smart form that shows/hides fields based on APM type (payment-nested vs direct structure)
+  - **🎯 Payload Structure Support**: Handles both payment-nested structures (MPESA, Ozow) and direct structures (Bank Transfer)
+  - **💾 Persistent Configuration**: APM tab remembers last selected PTP and maintains state across sessions
+  - **🔄 Bidirectional Sync**: APM form fields and JSON payload are fully synchronized - editing the JSON updates the form fields and vice versa
+  - **📐 Consistent Layout**: PTP filter and dropdown now span full width of right panel, matching card view layout
+  - **🔧 API Integration**: Full API testing with proper payload building, cURL command display, and response analysis
+  - **📊 Example APMs Included**: Pre-configured examples for KE-MPESA-Wiza, ZA-Ozow-Wiza RMB, and NG-Bank Transfer-Wiza
+- **🔧 Settings Persistence Fix (2024-12-19)**: Fixed AttributeError during application shutdown by adding proper attribute checks in `_persist_settings()` method. The error occurred when the application was closed before all UI components were fully initialized. Added `hasattr()` checks for all combo boxes and wrapped the persistence call in a try-catch block to prevent crashes during shutdown.
+- **🎨 APM Response Formatting Enhancement (2024-12-19)**: Updated APM tab to use the same enhanced JSON response formatting as the card views. The APM response section now uses `JSONTextEdit` with syntax highlighting and pretty formatting instead of plain text. Also improved the API response handling to match the card views with proper cURL command display, enhanced status indicators, and consistent formatting.
+- **🔒 Privacy Mode Feature (2024-12-19)**: Added "Privacy Mode" checkbox below the Base URL elements in both 3DS and non-3DS views. When enabled, card numbers, CVV, and API keys are masked in the UI showing only the first 6 digits followed by asterisks for card numbers (e.g., `527460**********`), all asterisks for CVV (e.g., `***`), and first 4 + last 4 characters for API keys (e.g., `abcd****wxyz`). Card number, CVV, and API key fields become read-only when privacy mode is enabled to prevent editing of masked data. The payload preview also becomes read-only in privacy mode. **Critical Fix**: API calls now correctly use the original unmasked values even when privacy mode is enabled, ensuring proper API functionality while maintaining UI privacy. **Privacy Enhancement**: cURL commands are hidden when privacy mode is enabled to prevent exposure of sensitive data in the response display. **Data Protection**: Settings persistence now saves original unmasked values when privacy mode is enabled, preventing data loss when the application is closed in privacy mode.
 
 ## MVP Completion Status
 1. ✅ Add API configuration UI (base URL, integration key)

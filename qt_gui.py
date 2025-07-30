@@ -272,7 +272,75 @@ ROOT = os.path.dirname(__file__)
 DATA_DIR = os.path.join(ROOT, "data")
 
 CARDS_FILE = os.path.join(DATA_DIR, "test-cards.json")
+APMS_FILE = os.path.join(DATA_DIR, "test-apms.json")
 PTP_FILE = os.path.join(DATA_DIR, "ptp-list.txt")
+
+def create_dummy_apm_data():
+    """Create dummy APM test data for first-time users."""
+    return {
+        "KE": {
+            "MPESA": {
+                "Wiza": {
+                    "description": "KE - MPESA - Wiza",
+                    "payload": {
+                        "integration_key": "aca76336b3014901eac51fa9ee31e7b9ebxlfe",
+                        "operation": "request",
+                        "payment": {
+                            "name": "Wiza Jalakasi",
+                            "email": "wiza+ke@ebanx.com",
+                            "phone_number": "254708663158",
+                            "country": "ke",
+                            "payment_type_code": "mpesa",
+                            "currency_code": "KES",
+                            "amount_total": "50"
+                        }
+                    }
+                }
+            }
+        },
+        "ZA": {
+            "Ozow": {
+                "Wiza RMB": {
+                    "description": "ZA - Ozow - Wiza RMB",
+                    "payload": {
+                        "integration_key": "d27edc9aac025ae3b18485d651c5609aebxlfe",
+                        "operation": "request",
+                        "payment": {
+                            "name": "Wiza Jalakasi",
+                            "email": "wiza+za@ebanx.com",
+                            "document": "MB023727",
+                            "phone_number": "27833662216",
+                            "country": "za",
+                            "payment_type_code": "ozow",
+                            "currency_code": "ZAR",
+                            "amount_total": "20.00"
+                        }
+                    }
+                }
+            }
+        },
+        "NG": {
+            "Bank Transfer": {
+                "Wiza": {
+                    "description": "NG - Bank Transfer - Wiza",
+                    "payload": {
+                        "integration_key": "17d229755c992db3d5f82a7163067e4bebxlfe",
+                        "operation": "request",
+                        "name": "Wiza Jalakasi",
+                        "email": "wiza@ebanx.com",
+                        "amount": 2000,
+                        "country": "NG",
+                        "instalments": "1",
+                        "currency_code": "NGN",
+                        "payment_type_code": "banktransfer",
+                        "redirect_url": "https://www.ebanx.com",
+                        "sub_acc_code": "META",
+                        "sub_acc_image_url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg"
+                    }
+                }
+            }
+        }
+    }
 
 def create_dummy_test_data():
     """Create dummy test data for first-time users."""
@@ -414,6 +482,12 @@ def load_json(path: str):
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump(dummy_data, fh, indent=2)
             return dummy_data
+        # If this is the test-apms.json file, create it with dummy APM data
+        elif path.endswith("test-apms.json"):
+            dummy_data = create_dummy_apm_data()
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(dummy_data, fh, indent=2)
+            return dummy_data
         else:
             raise FileNotFoundError(path)
     
@@ -432,7 +506,7 @@ def load_lines(path: str) -> List[str]:
 class TesterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("EBANX PTP Tester – Qt Edition")
+        self.setWindowTitle("EBANX PTP Tester by Wiza Jalakasi- wiza@ebanx.com")
         self.resize(1400, 900)  # Increased size for better layout
 
         # Setup logging for this instance
@@ -442,6 +516,8 @@ class TesterWindow(QMainWindow):
         try:
             self.test_data: Dict = load_json(CARDS_FILE)
             self.logger.info(f"Loaded test data: {len(self.test_data)} countries")
+            self.apm_data: Dict = load_json(APMS_FILE)
+            self.logger.info(f"Loaded APM data: {len(self.apm_data)} countries")
             self.ptp_list: List[str] = load_lines(PTP_FILE)
             self.logger.info(f"Loaded PTP list: {len(self.ptp_list)} profiles")
         except Exception as exc:
@@ -497,6 +573,15 @@ class TesterWindow(QMainWindow):
         self.soft_descriptor_edit.textChanged.connect(self.on_soft_descriptor_changed)
         self.soft_descriptor_checkbox.toggled.connect(self.on_soft_descriptor_changed)
 
+        # Privacy Mode Checkbox
+        self.privacy_mode_checkbox = QCheckBox("Privacy Mode")
+        self.privacy_mode_checkbox.setChecked(self.cfg.get("privacy_mode", False))
+        self.privacy_mode_checkbox.setToolTip("Mask card numbers, CVV, and API key in UI")
+        config_row.addWidget(self.privacy_mode_checkbox)
+        
+        # Connect privacy mode changes to update displays
+        self.privacy_mode_checkbox.toggled.connect(self.on_privacy_mode_changed)
+
         # Removed Test Connection button
         config_row.addStretch(1)
 
@@ -516,6 +601,19 @@ class TesterWindow(QMainWindow):
 
         # Initial payload display for the first tab
         self.update_payload_preview()
+        
+        # Set initial read-only state for card number and CVV fields based on privacy mode
+        is_privacy_enabled = self.privacy_mode_checkbox.isChecked()
+        self.card_fields[0].setReadOnly(is_privacy_enabled)
+        self.card_fields[3].setReadOnly(is_privacy_enabled)
+        
+        # Initialize original API key for privacy mode
+        self._original_api_key = self.key_edit.text()
+        
+        # Apply initial privacy mode masking if enabled
+        if is_privacy_enabled:
+            self.key_edit.setText(self.mask_api_key(self._original_api_key))
+            self.key_edit.setReadOnly(True)
 
     # ------------------------------------------------------------------
     # Tab creation methods
@@ -592,6 +690,10 @@ class TesterWindow(QMainWindow):
         # Sync payload changes back to card fields
         self.payload_edit.textChanged.connect(self.on_payload_changed)
         left_box.addWidget(self.payload_edit, stretch=1)
+        
+        # Set initial read-only state for payload editor based on privacy mode
+        is_privacy_enabled = self.privacy_mode_checkbox.isChecked()
+        self.payload_edit.setReadOnly(is_privacy_enabled)
 
         # Now that payload editor exists, we can safely populate the card combo
         self.populate_card_combo()
@@ -686,6 +788,11 @@ class TesterWindow(QMainWindow):
         for edit in self.card_fields_3ds:
             # textEdited fires on each change but does not fire when text is set programmatically
             edit.textEdited.connect(self.on_card_field_changed_3ds)
+        
+        # Set initial read-only state for 3DS card number and CVV fields based on privacy mode
+        is_privacy_enabled = self.privacy_mode_checkbox.isChecked()
+        self.card_fields_3ds[0].setReadOnly(is_privacy_enabled)
+        self.card_fields_3ds[3].setReadOnly(is_privacy_enabled)
 
         # Card management buttons -------------------------------------------------
         btn_row = QHBoxLayout()
@@ -722,6 +829,10 @@ class TesterWindow(QMainWindow):
         # Sync payload changes back to card fields
         self.payload_edit_3ds.textChanged.connect(self.on_payload_changed_3ds)
         left_box.addWidget(self.payload_edit_3ds, stretch=1)
+        
+        # Set initial read-only state for 3DS payload editor based on privacy mode
+        is_privacy_enabled = self.privacy_mode_checkbox.isChecked()
+        self.payload_edit_3ds.setReadOnly(is_privacy_enabled)
 
         # Now that payload editor exists, we can safely populate the card combo
         self.populate_card_combo_3ds()
@@ -792,11 +903,159 @@ class TesterWindow(QMainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         
-        # Placeholder content for APMs tab
-        placeholder = QLabel("Alternative Payment Methods (APMs)\n\nThis tab will contain functionality for testing alternative payment methods.\n\nFeatures to be implemented:\n• Mobile money (M-Pesa, etc.)\n• Bank transfers\n• Digital wallets\n• Local payment methods")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("QLabel { font-size: 14px; color: #666; }")
-        layout.addWidget(placeholder)
+        # Top row: APM selector only
+        top_row = QHBoxLayout()
+        layout.addLayout(top_row)
+        
+        # APM selector
+        top_row.addWidget(QLabel("APM Profile:"))
+        self.apm_combo = QComboBox()
+        self.apm_combo.setMinimumWidth(300)
+        top_row.addWidget(self.apm_combo)
+        top_row.addStretch(1)  # Push APM selector to the left
+        
+        # Middle section: Splitter for form and payload
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        layout.addWidget(splitter)
+        
+        # Left panel: APM details form
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        
+        # APM details section
+        left_layout.addWidget(QLabel("APM Details:"))
+        
+        # Form fields for APM data
+        self.apm_form_fields = []
+        apm_fields = [
+            ("Name:", "name"),
+            ("Email:", "email"),
+            ("Phone Number:", "phone_number"),
+            ("Country:", "country"),
+            ("Payment Type Code:", "payment_type_code"),
+            ("Currency Code:", "currency_code"),
+            ("Amount:", "amount_total")
+        ]
+        
+        for label_text, field_name in apm_fields:
+            row = QHBoxLayout()
+            row.addWidget(QLabel(label_text))
+            field = QLineEdit()
+            field.setObjectName(field_name)  # For easy identification
+            self.apm_form_fields.append(field)
+            row.addWidget(field)
+            left_layout.addLayout(row)
+        
+        # Additional fields that might be present
+        additional_fields = [
+            ("Document:", "document"),
+            ("Redirect URL:", "redirect_url"),
+            ("Sub Account Code:", "sub_acc_code"),
+            ("Sub Account Image URL:", "sub_acc_image_url"),
+            ("Instalments:", "instalments")
+        ]
+        
+        for label_text, field_name in additional_fields:
+            row = QHBoxLayout()
+            row.addWidget(QLabel(label_text))
+            field = QLineEdit()
+            field.setObjectName(field_name)
+            field.setVisible(False)  # Hidden by default, shown when needed
+            self.apm_form_fields.append(field)
+            row.addWidget(field)
+            left_layout.addLayout(row)
+        
+        # Connect form field changes
+        for field in self.apm_form_fields:
+            field.textChanged.connect(self.on_apm_field_changed)
+        
+        # APM management buttons
+        apm_buttons = QHBoxLayout()
+        self.save_apm_btn = QPushButton("Save APM")
+        self.save_apm_btn.clicked.connect(self.save_existing_apm)
+        apm_buttons.addWidget(self.save_apm_btn)
+        
+        self.add_apm_btn = QPushButton("Add New APM")
+        self.add_apm_btn.clicked.connect(self.save_new_apm)
+        apm_buttons.addWidget(self.add_apm_btn)
+        
+        self.delete_apm_btn = QPushButton("Delete APM")
+        self.delete_apm_btn.clicked.connect(self.delete_current_apm)
+        apm_buttons.addWidget(self.delete_apm_btn)
+        
+        self.reload_apm_btn = QPushButton("Reload from Disk")
+        self.reload_apm_btn.clicked.connect(self.reload_apms_from_disk)
+        apm_buttons.addWidget(self.reload_apm_btn)
+        
+        left_layout.addLayout(apm_buttons)
+        left_layout.addStretch(1)
+        
+        # Right panel: PTP, Payload and response
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        
+        # PTP section (moved here to match card layout)
+        right_layout.addWidget(QLabel("Select PTP:"))
+        
+        # PTP filter
+        self.ptp_filter_apm = QLineEdit()
+        self.ptp_filter_apm.setPlaceholderText("Filter PTPs...")
+        self.ptp_filter_apm.textChanged.connect(self.update_ptp_filter_apm)
+        right_layout.addWidget(self.ptp_filter_apm)
+        
+        # PTP selector
+        self.ptp_combo_apm = QComboBox()
+        right_layout.addWidget(self.ptp_combo_apm)
+        
+        # Payload section
+        right_layout.addWidget(QLabel("Payload:"))
+        self.payload_edit_apm = JSONTextEdit()
+        self.payload_edit_apm.setMinimumHeight(200)
+        right_layout.addWidget(self.payload_edit_apm)
+        
+        # Connect payload changes
+        self.payload_edit_apm.textChanged.connect(self.on_payload_changed_apm)
+        
+        # Payload buttons
+        payload_buttons = QHBoxLayout()
+        self.format_payload_btn_apm = QPushButton("Format JSON")
+        self.format_payload_btn_apm.clicked.connect(self.format_payload_json_apm)
+        payload_buttons.addWidget(self.format_payload_btn_apm)
+        
+        self.clear_response_btn_apm = QPushButton("Clear Response")
+        self.clear_response_btn_apm.clicked.connect(self.clear_response_apm)
+        payload_buttons.addWidget(self.clear_response_btn_apm)
+        
+        right_layout.addLayout(payload_buttons)
+        
+        # Response section
+        right_layout.addWidget(QLabel("Response:"))
+        self.response_edit_apm = JSONTextEdit()
+        self.response_edit_apm.setReadOnly(True)
+        self.response_edit_apm.setMinimumHeight(200)
+        # Enable text wrapping for better readability of long responses
+        self.response_edit_apm.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        right_layout.addWidget(self.response_edit_apm)
+        
+        # Test button
+        self.test_btn_apm = QPushButton("Run Test")
+        self.test_btn_apm.clicked.connect(self.run_test_apm)
+        right_layout.addWidget(self.test_btn_apm)
+        
+        # Add panels to splitter
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([400, 600])  # Initial split
+        
+        # Store references for later use
+        self.apm_tab = tab
+        self.apm_flat_list = []
+        
+        # Populate APM combo
+        self.populate_apm_combo()
+        
+        # Connect APM combo change
+        self.apm_combo.currentIndexChanged.connect(self.on_apm_changed)
         
         # Add tab to widget
         self.tab_widget.addTab(tab, "APMs")
@@ -857,10 +1116,17 @@ class TesterWindow(QMainWindow):
             self.update_payload_preview()
 
     def apply_card_to_form(self, card: Dict):
-        self.card_fields[0].setText(card["card_number"])
+        # Apply privacy mode masking to card number and CVV if enabled
+        card_number = card["card_number"]
+        cvv = card["card_cvv"]
+        if self.privacy_mode_checkbox.isChecked():
+            card_number = self.mask_card_number(card_number)
+            cvv = self.mask_cvv(cvv)
+        
+        self.card_fields[0].setText(card_number)
         self.card_fields[1].setText(card["card_name"])
         self.card_fields[2].setText(card["card_due_date"])
-        self.card_fields[3].setText(card["card_cvv"])
+        self.card_fields[3].setText(cvv)
 
     def current_card_country_and_data(self):
         idx = self.card_combo.currentIndex()
@@ -889,11 +1155,18 @@ class TesterWindow(QMainWindow):
             return
 
         # Prepare the up-to-date card dict based on current UI entries
+        # For privacy mode, we need to use the original card number and CVV for the actual payload
+        # but display the masked version in the UI
+        card_number_for_payload = card["card_number"]  # Always use original for API
+        card_number_for_display = self.card_fields[0].text().strip()  # What's currently in UI
+        cvv_for_payload = card["card_cvv"]  # Always use original for API
+        cvv_for_display = self.card_fields[3].text().strip()  # What's currently in UI
+        
         ui_card = {
-            "card_number": self.card_fields[0].text().strip(),
+            "card_number": card_number_for_payload,  # Use original for actual payload
             "card_name": self.card_fields[1].text().strip(),
             "card_due_date": self.card_fields[2].text().strip(),
-            "card_cvv": self.card_fields[3].text().strip(),
+            "card_cvv": cvv_for_payload,  # Use original for actual payload
         }
 
         # Start from saved custom payload (if any) so we don't discard user tuning
@@ -916,9 +1189,18 @@ class TesterWindow(QMainWindow):
         else:
             payload = self.build_payload(country, ui_card, customer)
 
+        # Create display version with masked card number, CVV, and API key if privacy mode is enabled
+        display_payload = copy.deepcopy(payload)
+        if self.privacy_mode_checkbox.isChecked():
+            display_payload["payment"]["card"]["card_number"] = card_number_for_display
+            display_payload["payment"]["card"]["card_cvv"] = cvv_for_display
+            # Mask API key in payload display
+            if hasattr(self, '_original_api_key') and self._original_api_key:
+                display_payload["integration_key"] = self.mask_api_key(self._original_api_key)
+
         # Temporarily block signals to avoid recursive updates when we set text
         self._syncing = True
-        self.payload_edit.set_json_text(payload)
+        self.payload_edit.set_json_text(display_payload)
         self._syncing = False
 
     # ------------------------------------------------------------------
@@ -928,12 +1210,27 @@ class TesterWindow(QMainWindow):
         """Called whenever the user edits one of the card QLineEdits."""
         if self._syncing:
             return
+        
+        # If privacy mode is enabled and user is editing the card number field,
+        # we need to handle this specially since the field shows masked data
+        if (self.privacy_mode_checkbox.isChecked() and 
+            self.card_fields[0].hasFocus() and 
+            self.card_fields[0].text() != self.card_fields[0].text().replace("*", "")):
+            # User is editing a masked card number - we should probably disable this
+            # or provide a way to edit the original. For now, just update normally.
+            pass
+        
         self.update_payload_preview()
 
     def on_api_key_changed(self):
         """Called when the API key field changes - update payload and save config."""
         if self._syncing:
             return
+        
+        # Store the original API key for privacy mode masking
+        if not self.privacy_mode_checkbox.isChecked():
+            self._original_api_key = self.key_edit.text()
+        
         self.update_payload_preview()
         self._persist_settings()
 
@@ -942,6 +1239,76 @@ class TesterWindow(QMainWindow):
         if self._syncing:
             return
         self.update_payload_preview()
+        self._persist_settings()
+
+    def mask_card_number(self, card_number: str) -> str:
+        """Mask card number showing only first 6 digits followed by asterisks."""
+        if not card_number or len(card_number) < 6:
+            return card_number
+        return card_number[:6] + "*" * (len(card_number) - 6)
+
+    def mask_cvv(self, cvv: str) -> str:
+        """Mask CVV showing only asterisks."""
+        if not cvv:
+            return cvv
+        return "*" * len(cvv)
+
+    def mask_api_key(self, api_key: str) -> str:
+        """Mask API key showing only first 4 and last 4 characters with asterisks in between."""
+        if not api_key or len(api_key) < 8:
+            return api_key
+        return api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+
+    def on_privacy_mode_changed(self):
+        """Called when privacy mode checkbox is toggled - update displays and save config."""
+        if self._syncing:
+            return
+        
+        # Update card number and CVV field read-only state based on privacy mode
+        is_privacy_enabled = self.privacy_mode_checkbox.isChecked()
+        self.card_fields[0].setReadOnly(is_privacy_enabled)
+        self.card_fields[3].setReadOnly(is_privacy_enabled)
+        if hasattr(self, 'card_fields_3ds'):
+            self.card_fields_3ds[0].setReadOnly(is_privacy_enabled)
+            self.card_fields_3ds[3].setReadOnly(is_privacy_enabled)
+        
+        # Make payload editors read-only when privacy mode is enabled
+        self.payload_edit.setReadOnly(is_privacy_enabled)
+        if hasattr(self, 'payload_edit_3ds'):
+            self.payload_edit_3ds.setReadOnly(is_privacy_enabled)
+        
+        # Handle API key masking
+        if is_privacy_enabled:
+            # Store the original API key and show masked version
+            if not hasattr(self, '_original_api_key') or not self._original_api_key:
+                self._original_api_key = self.key_edit.text()
+            self.key_edit.setText(self.mask_api_key(self._original_api_key))
+            self.key_edit.setReadOnly(True)
+        else:
+            # Restore original API key and make editable
+            if hasattr(self, '_original_api_key') and self._original_api_key:
+                self.key_edit.setText(self._original_api_key)
+            self.key_edit.setReadOnly(False)
+            # Update the stored original key to current value when privacy mode is disabled
+            self._original_api_key = self.key_edit.text()
+        
+        # Refresh current card display to apply masking immediately
+        current_idx = self.card_combo.currentIndex()
+        if 0 <= current_idx < len(self.flat_cards):
+            _, _, current_card = self.flat_cards[current_idx]
+            self.apply_card_to_form(current_card)
+        
+        # Also refresh 3DS tab if it exists
+        if hasattr(self, 'card_combo_3ds'):
+            current_idx_3ds = self.card_combo_3ds.currentIndex()
+            if 0 <= current_idx_3ds < len(self.flat_cards_3ds):
+                _, _, current_card_3ds = self.flat_cards_3ds[current_idx_3ds]
+                self.apply_card_to_form_3ds(current_card_3ds)
+        
+        self.update_payload_preview()
+        # Also update 3DS tab if it exists
+        if hasattr(self, 'update_payload_preview_3ds'):
+            self.update_payload_preview_3ds()
         self._persist_settings()
 
     def on_payload_changed(self):
@@ -1089,12 +1456,28 @@ class TesterWindow(QMainWindow):
             QMessageBox.warning(self, "No key", "Please enter Integration Key")
             return
 
-        # Use the JSON currently in the payload editor as the request body
+        # For API calls, we need to use the original unmasked values
+        # Get the current payload but ensure we use original values for sensitive fields
         payload_data = self.payload_edit.get_json_data()
         if payload_data is None:
             self.logger.error("Invalid JSON payload")
             QMessageBox.critical(self, "Invalid JSON", "Payload JSON is invalid.")
             return
+        
+        # If privacy mode is enabled, replace masked values with original values for API call
+        if self.privacy_mode_checkbox.isChecked():
+            # Use original card number and CVV
+            payload_data["payment"]["card"]["card_number"] = card["card_number"]
+            payload_data["payment"]["card"]["card_cvv"] = card["card_cvv"]
+            # Use original API key
+            if hasattr(self, '_original_api_key') and self._original_api_key:
+                payload_data["integration_key"] = self._original_api_key
+                self.logger.info(f"Privacy mode: Using original API key (masked for log)")
+            else:
+                self.logger.warning("Privacy mode enabled but no original API key found")
+        else:
+            # Ensure we always have the current API key from the UI field
+            payload_data["integration_key"] = self.key_edit.text() or "{integration_key}"
 
         headers = {
             "Content-Type": "application/json",
@@ -1108,16 +1491,19 @@ class TesterWindow(QMainWindow):
         self.logger.info(f"Country: {country}")
 
         # ------------------------------------------------------------------
-        # Observability – show the cURL command first
+        # Observability – show the cURL command first (unless privacy mode is enabled)
         # ------------------------------------------------------------------
         self.run_btn.setEnabled(False)
 
-        curl_cmd = self._build_curl_command(url, ptp, payload_data)
-
-        # Show cURL preview and waiting message
-        self.response_edit.appendPlainText("🔧 cURL Command:\n")
-        self.response_edit.appendPlainText(curl_cmd)
-        self.response_edit.appendPlainText("\n\n⏳ Waiting for response...\n")
+        # Only show cURL command if privacy mode is disabled
+        if not self.privacy_mode_checkbox.isChecked():
+            curl_cmd = self._build_curl_command(url, ptp, payload_data)
+            self.response_edit.appendPlainText("🔧 cURL Command:\n")
+            self.response_edit.appendPlainText(curl_cmd)
+            self.response_edit.appendPlainText("\n\n⏳ Waiting for response...\n")
+        else:
+            self.response_edit.appendPlainText("🔒 Privacy Mode: cURL command hidden\n")
+            self.response_edit.appendPlainText("⏳ Waiting for response...\n")
         QApplication.processEvents()
 
         # Prepare header that will be shown once the response is available
@@ -1226,15 +1612,26 @@ class TesterWindow(QMainWindow):
     # Config persistence helpers
     # ------------------------------------------------------------------
     def _persist_settings(self):
+        # When privacy mode is enabled, use original values instead of masked UI values
+        # to prevent data loss
+        if self.privacy_mode_checkbox.isChecked():
+            # Use original API key if available, otherwise don't save it
+            api_key_to_save = getattr(self, '_original_api_key', self.key_edit.text())
+        else:
+            # Use current UI value when privacy mode is disabled
+            api_key_to_save = self.key_edit.text()
+        
         save_config({
-            "integration_key": self.key_edit.text(),
+            "integration_key": api_key_to_save,
             "base_url": self.base_url_edit.text(),
             "soft_descriptor": self.soft_descriptor_edit.text(),
             "use_soft_descriptor": self.soft_descriptor_checkbox.isChecked(),
-            "last_ptp": self.ptp_combo.currentText(),
-            "last_ptp_3ds": self.ptp_combo_3ds.currentText(),
-            "last_card_index": self.card_combo.currentIndex(),
-            "last_card_index_3ds": self.card_combo_3ds.currentIndex(),
+            "privacy_mode": self.privacy_mode_checkbox.isChecked(),
+            "last_ptp": self.ptp_combo.currentText() if hasattr(self, 'ptp_combo') else "",
+            "last_ptp_3ds": self.ptp_combo_3ds.currentText() if hasattr(self, 'ptp_combo_3ds') else "",
+            "last_ptp_apm": self.ptp_combo_apm.currentText() if hasattr(self, 'ptp_combo_apm') else "",
+            "last_card_index": self.card_combo.currentIndex() if hasattr(self, 'card_combo') else 0,
+            "last_card_index_3ds": self.card_combo_3ds.currentIndex() if hasattr(self, 'card_combo_3ds') else 0,
         })
 
     def _find_card_path(self, target_card):
@@ -1371,10 +1768,17 @@ class TesterWindow(QMainWindow):
             self.update_payload_preview_3ds()
 
     def apply_card_to_form_3ds(self, card: Dict):
-        self.card_fields_3ds[0].setText(card["card_number"])
+        # Apply privacy mode masking to card number and CVV if enabled
+        card_number = card["card_number"]
+        cvv = card["card_cvv"]
+        if self.privacy_mode_checkbox.isChecked():
+            card_number = self.mask_card_number(card_number)
+            cvv = self.mask_cvv(cvv)
+        
+        self.card_fields_3ds[0].setText(card_number)
         self.card_fields_3ds[1].setText(card["card_name"])
         self.card_fields_3ds[2].setText(card["card_due_date"])
-        self.card_fields_3ds[3].setText(card["card_cvv"])
+        self.card_fields_3ds[3].setText(cvv)
 
     def current_card_country_and_data_3ds(self):
         idx = self.card_combo_3ds.currentIndex()
@@ -1394,11 +1798,18 @@ class TesterWindow(QMainWindow):
             return
 
         # Prepare the up-to-date card dict based on current UI entries
+        # For privacy mode, we need to use the original card number and CVV for the actual payload
+        # but display the masked version in the UI
+        card_number_for_payload = card["card_number"]  # Always use original for API
+        card_number_for_display = self.card_fields_3ds[0].text().strip()  # What's currently in UI
+        cvv_for_payload = card["card_cvv"]  # Always use original for API
+        cvv_for_display = self.card_fields_3ds[3].text().strip()  # What's currently in UI
+        
         ui_card = {
-            "card_number": self.card_fields_3ds[0].text().strip(),
+            "card_number": card_number_for_payload,  # Use original for actual payload
             "card_name": self.card_fields_3ds[1].text().strip(),
             "card_due_date": self.card_fields_3ds[2].text().strip(),
-            "card_cvv": self.card_fields_3ds[3].text().strip(),
+            "card_cvv": cvv_for_payload,  # Use original for actual payload
         }
 
         # Start from saved custom payload for 3DS (if any) so we don't discard user tuning
@@ -1421,9 +1832,18 @@ class TesterWindow(QMainWindow):
         else:
             payload = self.build_payload_3ds(country, ui_card, customer)
 
+        # Create display version with masked card number, CVV, and API key if privacy mode is enabled
+        display_payload = copy.deepcopy(payload)
+        if self.privacy_mode_checkbox.isChecked():
+            display_payload["payment"]["card"]["card_number"] = card_number_for_display
+            display_payload["payment"]["card"]["card_cvv"] = cvv_for_display
+            # Mask API key in payload display
+            if hasattr(self, '_original_api_key') and self._original_api_key:
+                display_payload["integration_key"] = self.mask_api_key(self._original_api_key)
+
         # Temporarily block signals to avoid recursive updates when we set text
         self._syncing = True
-        self.payload_edit_3ds.set_json_text(payload)
+        self.payload_edit_3ds.set_json_text(display_payload)
         self._syncing = False
 
     def on_card_field_changed_3ds(self):
@@ -1534,12 +1954,28 @@ class TesterWindow(QMainWindow):
             QMessageBox.warning(self, "No key", "Please enter Integration Key")
             return
 
-        # Use the JSON currently in the payload editor as the request body
+        # For API calls, we need to use the original unmasked values
+        # Get the current payload but ensure we use original values for sensitive fields
         payload_data = self.payload_edit_3ds.get_json_data()
         if payload_data is None:
             self.logger.error("Invalid JSON payload for 3DS test")
             QMessageBox.critical(self, "Invalid JSON", "Payload JSON is invalid.")
             return
+        
+        # If privacy mode is enabled, replace masked values with original values for API call
+        if self.privacy_mode_checkbox.isChecked():
+            # Use original card number and CVV
+            payload_data["payment"]["card"]["card_number"] = card["card_number"]
+            payload_data["payment"]["card"]["card_cvv"] = card["card_cvv"]
+            # Use original API key
+            if hasattr(self, '_original_api_key') and self._original_api_key:
+                payload_data["integration_key"] = self._original_api_key
+                self.logger.info(f"Privacy mode: Using original API key for 3DS (masked for log)")
+            else:
+                self.logger.warning("Privacy mode enabled but no original API key found for 3DS")
+        else:
+            # Ensure we always have the current API key from the UI field
+            payload_data["integration_key"] = self.key_edit.text() or "{integration_key}"
 
         headers = {
             "Content-Type": "application/json",
@@ -1553,18 +1989,21 @@ class TesterWindow(QMainWindow):
         self.logger.info(f"Country: {country}")
 
         # ------------------------------------------------------------------
-        # Observability – show the cURL command first
+        # Observability – show the cURL command first (unless privacy mode is enabled)
         # ------------------------------------------------------------------
         self.run_btn_3ds.setEnabled(False)
         # Disable 3DS button when starting new API call
         self.authenticate_3ds_btn_3ds.setEnabled(False)
 
-        curl_cmd = self._build_curl_command(url, ptp, payload_data)
-
-        # Show cURL preview and waiting message
-        self.response_edit_3ds.appendPlainText("🔧 cURL Command:\n")
-        self.response_edit_3ds.appendPlainText(curl_cmd)
-        self.response_edit_3ds.appendPlainText("\n\n⏳ Waiting for response...\n")
+        # Only show cURL command if privacy mode is disabled
+        if not self.privacy_mode_checkbox.isChecked():
+            curl_cmd = self._build_curl_command(url, ptp, payload_data)
+            self.response_edit_3ds.appendPlainText("🔧 cURL Command:\n")
+            self.response_edit_3ds.appendPlainText(curl_cmd)
+            self.response_edit_3ds.appendPlainText("\n\n⏳ Waiting for response...\n")
+        else:
+            self.response_edit_3ds.appendPlainText("🔒 Privacy Mode: cURL command hidden\n")
+            self.response_edit_3ds.appendPlainText("⏳ Waiting for response...\n")
         QApplication.processEvents()
 
         # Prepare header that will be shown once the response is available
@@ -1794,25 +2233,595 @@ class TesterWindow(QMainWindow):
             self._current_3ds_url_3ds = None
 
     def authenticate_3ds_in_browser_3ds(self):
-        """Open the 3DS authentication URL in the user's default browser for 3DS tab."""
-        if hasattr(self, '_current_3ds_url_3ds') and self._current_3ds_url_3ds:
+        """Open 3DS authentication URL in browser for 3DS tab."""
+        if hasattr(self, '_3ds_url_3ds') and self._3ds_url_3ds:
             try:
-                webbrowser.open(self._current_3ds_url_3ds)
-                self.logger.info(f"Opened 3DS URL in browser (3DS tab): {self._current_3ds_url_3ds}")
-                QMessageBox.information(self, "3DS Authentication", 
-                    f"3DS authentication page opened in your browser.\n\n"
-                    f"Complete the authentication process in your browser, then return to this app.")
-            except Exception as e:
-                self.logger.error(f"Failed to open 3DS URL (3DS tab): {e}")
-                QMessageBox.critical(self, "Browser Error", 
-                    f"Failed to open browser: {str(e)}\n\n"
-                    f"Please manually open this URL:\n{self._current_3ds_url_3ds}")
+                webbrowser.open(self._3ds_url_3ds)
+                self.logger.info(f"Opened 3DS URL in browser: {self._3ds_url_3ds}")
+            except Exception as exc:
+                self.logger.error(f"Failed to open 3DS URL: {exc}")
+                QMessageBox.warning(self, "Browser Error", f"Failed to open browser: {exc}")
         else:
-            QMessageBox.warning(self, "No 3DS URL", "No valid 3DS authentication URL found.")
+            QMessageBox.information(self, "No 3DS URL", "No 3DS authentication URL found in the last response.")
 
     def closeEvent(self, event):
-        self._persist_settings()
+        try:
+            self._persist_settings()
+        except Exception as exc:
+            # Log the error but don't prevent the application from closing
+            if hasattr(self, 'logger'):
+                self.logger.error(f"Error during settings persistence: {exc}")
         super().closeEvent(event)
+
+    # ------------------------------------------------------------------
+    # APM-specific methods
+    # ------------------------------------------------------------------
+    
+    def flatten_apms(self):
+        """Flatten APM data structure for combo box display."""
+        apms = []
+        for country, payment_methods in self.apm_data.items():
+            for payment_method, profiles in payment_methods.items():
+                for profile_name, profile_data in profiles.items():
+                    display = f"{country} - {payment_method} - {profile_name}"
+                    apms.append((display, country, payment_method, profile_name, profile_data))
+        return apms
+
+    def populate_apm_combo(self):
+        """Populate the APM combo box with available APM profiles."""
+        self.apm_flat_list = self.flatten_apms()
+        self.apm_combo.clear()
+        self.apm_combo.addItems([t[0] for t in self.apm_flat_list])
+        if self.apm_flat_list:
+            self.apm_combo.setCurrentIndex(0)
+            self.apply_apm_to_form(self.apm_flat_list[0][4])
+        
+        # Also populate PTP combo
+        self.ptp_combo_apm.clear()
+        self.ptp_combo_apm.addItems(self.ptp_list)
+        
+        # Restore last selected PTP for APM tab
+        last_ptp = self.cfg.get("last_ptp_apm", "")
+        if last_ptp in self.ptp_list:
+            self.ptp_combo_apm.setCurrentText(last_ptp)
+
+    def on_apm_changed(self, idx: int):
+        """Handle APM selection change."""
+        if 0 <= idx < len(self.apm_flat_list):
+            _, _, _, _, apm_data = self.apm_flat_list[idx]
+            self.apply_apm_to_form(apm_data)
+            self.update_payload_preview_apm()
+
+    def apply_apm_to_form(self, apm_data: Dict):
+        """Apply APM data to form fields."""
+        payload = apm_data.get("payload", {})
+        
+        # Clear all fields first
+        for field in self.apm_form_fields:
+            field.clear()
+        
+        # Apply payment data if it exists
+        payment_data = payload.get("payment", {})
+        if payment_data:
+            # Map payment fields to form fields
+            field_mapping = {
+                "name": "name",
+                "email": "email", 
+                "phone_number": "phone_number",
+                "country": "country",
+                "payment_type_code": "payment_type_code",
+                "currency_code": "currency_code",
+                "amount_total": "amount_total",
+                "document": "document"
+            }
+            
+            for payload_key, field_name in field_mapping.items():
+                if payload_key in payment_data:
+                    field = self._find_field_by_name(field_name)
+                    if field:
+                        field.setText(str(payment_data[payload_key]))
+        else:
+            # Direct payload fields (like NG Bank Transfer)
+            field_mapping = {
+                "name": "name",
+                "email": "email",
+                "country": "country", 
+                "payment_type_code": "payment_type_code",
+                "currency_code": "currency_code",
+                "amount": "amount_total",
+                "redirect_url": "redirect_url",
+                "sub_acc_code": "sub_acc_code",
+                "sub_acc_image_url": "sub_acc_image_url",
+                "instalments": "instalments"
+            }
+            
+            for payload_key, field_name in field_mapping.items():
+                if payload_key in payload:
+                    field = self._find_field_by_name(field_name)
+                    if field:
+                        field.setText(str(payload[payload_key]))
+        
+        # Show/hide additional fields based on what's populated
+        self._update_additional_fields_visibility()
+
+    def _find_field_by_name(self, field_name: str):
+        """Find form field by object name."""
+        for field in self.apm_form_fields:
+            if field.objectName() == field_name:
+                return field
+        return None
+
+    def _update_additional_fields_visibility(self):
+        """Show/hide additional fields based on what's populated."""
+        additional_fields = ["document", "redirect_url", "sub_acc_code", "sub_acc_image_url", "instalments"]
+        
+        for field_name in additional_fields:
+            field = self._find_field_by_name(field_name)
+            if field:
+                field.setVisible(bool(field.text().strip()))
+
+    def current_apm_data(self):
+        """Get current APM selection data."""
+        idx = self.apm_combo.currentIndex()
+        if not (0 <= idx < len(self.apm_flat_list)):
+            return None, None, None, None, None
+        display, country, payment_method, profile_name, apm_data = self.apm_flat_list[idx]
+        return country, payment_method, profile_name, apm_data
+
+    def update_payload_preview_apm(self):
+        """Update payload preview for APM tab."""
+        if self._syncing:
+            return
+
+        country, payment_method, profile_name, apm_data = self.current_apm_data()
+        if not apm_data:
+            return
+
+        # Get current form values
+        form_data = {}
+        for field in self.apm_form_fields:
+            if field.text().strip():
+                form_data[field.objectName()] = field.text().strip()
+
+        # Build payload based on current APM structure
+        payload = self.build_payload_apm(country, payment_method, profile_name, apm_data, form_data)
+        
+        # Update payload editor
+        self._syncing = True
+        self.payload_edit_apm.set_json_text(payload)
+        self._syncing = False
+
+    def on_apm_field_changed(self):
+        """Handle APM form field changes."""
+        self.update_payload_preview_apm()
+
+    def on_payload_changed_apm(self):
+        """Keep APM form fields and API key in sync when the payload editor changes.
+
+        We attempt to parse the JSON on each change. On valid JSON we extract
+        the payment data and update form fields. We also sync the integration_key
+        from the payload to the UI field. This direction-of-sync ensures
+        that manual edits in the JSON view are reflected back in the APM
+        form fields and API key field.
+        """
+        if self._syncing:
+            return
+
+        data = self.payload_edit_apm.get_json_data()
+        if not data:
+            return  # Invalid / incomplete JSON – ignore until valid
+
+        self._syncing = True
+        
+        # Update APM form fields based on payload structure
+        try:
+            # Check if this is a payment-nested structure or direct structure
+            if "payment" in data:
+                # Payment-nested structure (like MPESA, Ozow)
+                payment_data = data["payment"]
+                
+                # Map payload fields to form fields
+                field_mapping = {
+                    "name": "name",
+                    "email": "email",
+                    "phone_number": "phone_number",
+                    "country": "country",
+                    "payment_type_code": "payment_type_code",
+                    "currency_code": "currency_code",
+                    "amount_total": "amount_total",
+                    "document": "document"
+                }
+                
+                for payload_key, field_name in field_mapping.items():
+                    if payload_key in payment_data:
+                        field = self._find_field_by_name(field_name)
+                        if field:
+                            field.setText(str(payment_data[payload_key]))
+            else:
+                # Direct structure (like NG Bank Transfer)
+                field_mapping = {
+                    "name": "name",
+                    "email": "email",
+                    "country": "country",
+                    "payment_type_code": "payment_type_code",
+                    "currency_code": "currency_code",
+                    "amount": "amount_total",
+                    "redirect_url": "redirect_url",
+                    "sub_acc_code": "sub_acc_code",
+                    "sub_acc_image_url": "sub_acc_image_url",
+                    "instalments": "instalments"
+                }
+                
+                for payload_key, field_name in field_mapping.items():
+                    if payload_key in data:
+                        field = self._find_field_by_name(field_name)
+                        if field:
+                            field.setText(str(data[payload_key]))
+            
+            # Update additional fields visibility
+            self._update_additional_fields_visibility()
+            
+        except (KeyError, TypeError):
+            pass  # Payment data not available or structure unexpected
+        
+        # Update API key field if present in payload
+        if "integration_key" in data:
+            api_key = data["integration_key"]
+            if api_key and api_key != "{integration_key}":
+                self.key_edit.setText(str(api_key))
+        
+        self._syncing = False
+
+    def format_payload_json_apm(self):
+        """Format JSON in APM payload editor."""
+        self.payload_edit_apm.format_json()
+
+    def clear_response_apm(self):
+        """Clear response in APM tab."""
+        self.response_edit_apm.clear()
+
+    def build_payload_apm(self, country: str, payment_method: str, profile_name: str, apm_data: Dict, form_data: Dict):
+        """Build payload for APM based on current form data and APM structure."""
+        # Start with the original payload structure
+        payload = copy.deepcopy(apm_data.get("payload", {}))
+        
+        # Update integration key from UI
+        payload["integration_key"] = self.key_edit.text().strip()
+        
+        # Check if this is a payment-nested structure or direct structure
+        if "payment" in payload:
+            # Payment-nested structure (like MPESA, Ozow)
+            payment_data = payload["payment"]
+            
+            # Update payment fields from form
+            field_mapping = {
+                "name": "name",
+                "email": "email",
+                "phone_number": "phone_number", 
+                "country": "country",
+                "payment_type_code": "payment_type_code",
+                "currency_code": "currency_code",
+                "amount_total": "amount_total",
+                "document": "document"
+            }
+            
+            for form_key, payload_key in field_mapping.items():
+                if form_key in form_data:
+                    payment_data[payload_key] = form_data[form_key]
+        else:
+            # Direct structure (like NG Bank Transfer)
+            field_mapping = {
+                "name": "name",
+                "email": "email",
+                "country": "country",
+                "payment_type_code": "payment_type_code", 
+                "currency_code": "currency_code",
+                "amount_total": "amount",
+                "redirect_url": "redirect_url",
+                "sub_acc_code": "sub_acc_code",
+                "sub_acc_image_url": "sub_acc_image_url",
+                "instalments": "instalments"
+            }
+            
+            for form_key, payload_key in field_mapping.items():
+                if form_key in form_data:
+                    payload[payload_key] = form_data[form_key]
+        
+        return payload
+
+    def run_test_apm(self):
+        """Run API test for APM."""
+        country, payment_method, profile_name, apm_data = self.current_apm_data()
+        if not apm_data:
+            QMessageBox.warning(self, "No APM Selected", "Please select an APM profile.")
+            return
+
+        # Get form data
+        form_data = {}
+        for field in self.apm_form_fields:
+            if field.text().strip():
+                form_data[field.objectName()] = field.text().strip()
+
+        # Build payload
+        payload = self.build_payload_apm(country, payment_method, profile_name, apm_data, form_data)
+        
+        # Get API configuration
+        base_url = self.base_url_edit.text().strip().rstrip('/')
+        integration_key = self.key_edit.text().strip()
+        ptp = self.ptp_combo_apm.currentText().strip()
+        
+        if not base_url or not integration_key or not ptp:
+            QMessageBox.warning(self, "Missing Configuration", "Please fill in Base URL, Integration Key, and select a PTP.")
+            return
+
+        # Disable test button during API call
+        self.test_btn_apm.setEnabled(False)
+        self.test_btn_apm.setText("Testing...")
+        
+        # Prepare API call
+        url = f"{base_url}/ws/direct"
+        headers = {
+            "Content-Type": "application/json",
+            "X-EBANX-Custom-Payment-Type-Profile": ptp
+        }
+        
+        # Log the API call
+        self.logger.info(f"APM API call - URL: {url}")
+        self.logger.info(f"APM API call - Headers: {headers}")
+        self.logger.info(f"APM API call - Payload: {payload}")
+
+        # ------------------------------------------------------------------
+        # Observability – show the cURL command first
+        # ------------------------------------------------------------------
+        curl_cmd = self._build_curl_command_apm(base_url, ptp, payload)
+
+        # Show cURL preview and waiting message
+        self.response_edit_apm.appendPlainText("🔧 cURL Command:\n")
+        self.response_edit_apm.appendPlainText(curl_cmd)
+        self.response_edit_apm.appendPlainText("\n\n⏳ Waiting for response...\n")
+        QApplication.processEvents()
+
+        # Prepare header that will be shown once the response is available
+        request_info = (
+            f"🌐 POST {url}\n"
+            f"📋 PTP: {ptp}\n"
+            f"💳 APM: {country} - {payment_method} - {profile_name}\n"
+            f"⏰ {datetime.now().strftime('%H:%M:%S')}\n"
+            + "─" * 50 + "\n"
+        )
+ 
+        # Create a worker and a QThread to run the network request without blocking the UI
+        self._api_thread_apm = QThread(self)  # Keep reference as attribute
+        worker = APICallWorker(url, payload, headers)
+        worker.moveToThread(self._api_thread_apm)
+        self._api_worker_apm = worker  # Prevent garbage collection
+
+        # Wire up signals
+        self._api_thread_apm.started.connect(worker.run)
+        worker.finished.connect(self._handle_api_response_apm)
+        worker.error.connect(self._handle_api_error_apm)
+
+        # Ensure thread stops/cleans up
+        worker.finished.connect(self._api_thread_apm.quit)
+        worker.error.connect(self._api_thread_apm.quit)
+        self._api_thread_apm.finished.connect(worker.deleteLater)
+        self._api_thread_apm.finished.connect(self._api_thread_apm.deleteLater)
+
+        # Persist request info for handlers
+        self._latest_request_info_apm = request_info
+
+        # Start the background job
+        self._api_thread_apm.start()
+
+    def _build_curl_command_apm(self, url: str, ptp: str, payload) -> str:
+        """Build cURL command for APM API call."""
+        import json
+        payload_json = json.dumps(payload, indent=2)
+        return f"""curl -X POST "{url}/ws/direct" \\
+  -H "Content-Type: application/json" \\
+  -H "X-EBANX-Custom-Payment-Type-Profile: {ptp}" \\
+  -d '{payload_json}'"""
+
+    def _handle_api_response_apm(self, resp):
+        """Handle API response for APM."""
+        self.logger.info(f"APM API response received: {resp.status_code} {resp.reason}")
+        
+        # Append response header below the existing cURL preview so it's not lost
+        self.response_edit_apm.appendPlainText("\n" + self._latest_request_info_apm)
+        
+        # Enhanced response display with status color coding
+        status_text = f"📊 Status: {resp.status_code} {resp.reason}\n"
+        if resp.status_code >= 200 and resp.status_code < 300:
+            status_text += "✅ Success\n"
+            self.logger.info("APM API call successful")
+        elif resp.status_code >= 400 and resp.status_code < 500:
+            status_text += "❌ Client Error\n"
+            self.logger.warning(f"APM API client error: {resp.status_code}")
+        elif resp.status_code >= 500:
+            status_text += "🔥 Server Error\n"
+            self.logger.error(f"APM API server error: {resp.status_code}")
+        else:
+            status_text += "⚠️  Other Status\n"
+            self.logger.warning(f"APM API unexpected status: {resp.status_code}")
+        
+        self.response_edit_apm.appendPlainText(status_text)
+        
+        try:
+            response_data = resp.json()
+            self.response_edit_apm.appendPlainText("📄 Response Body:\n")
+            self.response_edit_apm.set_json_text(response_data)
+        except ValueError:
+            self.response_edit_apm.appendPlainText("📄 Response Text:\n")
+            self.response_edit_apm.appendPlainText(resp.text)
+                
+        self.test_btn_apm.setEnabled(True)
+        self.test_btn_apm.setText("Run Test")
+        # Persist latest settings
+        self._persist_settings()
+
+    def _handle_api_error_apm(self, error_msg: str):
+        """Handle API error for APM."""
+        self.logger.error(f"APM API call failed: {error_msg}")
+        
+        # Append error information below preview
+        self.response_edit_apm.appendPlainText("\n" + self._latest_request_info_apm)
+        self.response_edit_apm.appendPlainText(f"❌ Error: {error_msg}")
+        self.test_btn_apm.setEnabled(True)
+        self.test_btn_apm.setText("Run Test")
+        # Persist latest settings
+        self._persist_settings()
+
+    def update_ptp_filter_apm(self, text: str):
+        """Update PTP filter for APM tab."""
+        self.ptp_combo_apm.clear()
+        
+        if text.strip():
+            filtered_ptps = [ptp for ptp in self.ptp_list if text.lower() in ptp.lower()]
+            self.ptp_combo_apm.addItems(filtered_ptps)
+        else:
+            self.ptp_combo_apm.addItems(self.ptp_list)
+        
+        # Restore last selected PTP if it's in the filtered list
+        last_ptp = self.cfg.get("last_ptp_apm", "")
+        if last_ptp and last_ptp in [self.ptp_combo_apm.itemText(i) for i in range(self.ptp_combo_apm.count())]:
+            self.ptp_combo_apm.setCurrentText(last_ptp)
+
+    def save_existing_apm(self):
+        """Save changes to existing APM."""
+        country, payment_method, profile_name, apm_data = self.current_apm_data()
+        if not apm_data:
+            QMessageBox.warning(self, "No APM Selected", "Please select an APM to save.")
+            return
+
+        try:
+            # Get current payload
+            payload = self.payload_edit_apm.get_json_data()
+            
+            # Update the APM data
+            self.apm_data[country][payment_method][profile_name]["payload"] = payload
+            
+            # Write to file
+            self._write_apms_file()
+            
+            QMessageBox.information(self, "APM Saved", f"APM '{profile_name}' saved successfully.")
+            self.logger.info(f"APM saved: {country} - {payment_method} - {profile_name}")
+            
+        except Exception as exc:
+            QMessageBox.critical(self, "Save Error", f"Failed to save APM: {exc}")
+            self.logger.error(f"Failed to save APM: {exc}")
+
+    def save_new_apm(self):
+        """Add new APM profile."""
+        # Get input from user
+        country, ok = QInputDialog.getText(self, "New APM", "Country (e.g., KE, ZA, NG):")
+        if not ok or not country.strip():
+            return
+            
+        payment_method, ok = QInputDialog.getText(self, "New APM", "Payment Method (e.g., MPESA, Ozow, Bank Transfer):")
+        if not ok or not payment_method.strip():
+            return
+            
+        profile_name, ok = QInputDialog.getText(self, "New APM", "Profile Name:")
+        if not ok or not profile_name.strip():
+            return
+
+        # Check if APM already exists
+        if (country in self.apm_data and 
+            payment_method in self.apm_data[country] and 
+            profile_name in self.apm_data[country][payment_method]):
+            QMessageBox.warning(self, "APM Exists", f"APM '{profile_name}' already exists for {country} - {payment_method}")
+            return
+
+        # Create new APM structure
+        if country not in self.apm_data:
+            self.apm_data[country] = {}
+        if payment_method not in self.apm_data[country]:
+            self.apm_data[country][payment_method] = {}
+            
+        # Create default payload structure
+        default_payload = {
+            "integration_key": self.key_edit.text().strip(),
+            "operation": "request",
+            "payment": {
+                "name": "Test User",
+                "email": f"test+{country.lower()}@ebanx.com",
+                "phone_number": "",
+                "country": country.lower(),
+                "payment_type_code": "",
+                "currency_code": "",
+                "amount_total": "100"
+            }
+        }
+        
+        self.apm_data[country][payment_method][profile_name] = {
+            "description": f"{country} - {payment_method} - {profile_name}",
+            "payload": default_payload
+        }
+        
+        # Write to file
+        self._write_apms_file()
+        
+        # Refresh combo
+        self.populate_apm_combo()
+        
+        # Select the new APM
+        new_display = f"{country} - {payment_method} - {profile_name}"
+        idx = self.apm_combo.findText(new_display)
+        if idx >= 0:
+            self.apm_combo.setCurrentIndex(idx)
+        
+        QMessageBox.information(self, "APM Added", f"New APM '{profile_name}' added successfully.")
+        self.logger.info(f"New APM added: {country} - {payment_method} - {profile_name}")
+
+    def delete_current_apm(self):
+        """Delete current APM profile."""
+        country, payment_method, profile_name, apm_data = self.current_apm_data()
+        if not apm_data:
+            QMessageBox.warning(self, "No APM Selected", "Please select an APM to delete.")
+            return
+
+        reply = QMessageBox.question(
+            self, 
+            "Delete APM", 
+            f"Are you sure you want to delete APM '{profile_name}' ({country} - {payment_method})?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Remove from data structure
+            del self.apm_data[country][payment_method][profile_name]
+            
+            # Clean up empty structures
+            if not self.apm_data[country][payment_method]:
+                del self.apm_data[country][payment_method]
+            if not self.apm_data[country]:
+                del self.apm_data[country]
+            
+            # Write to file
+            self._write_apms_file()
+            
+            # Refresh combo
+            self.populate_apm_combo()
+            
+            QMessageBox.information(self, "APM Deleted", f"APM '{profile_name}' deleted successfully.")
+            self.logger.info(f"APM deleted: {country} - {payment_method} - {profile_name}")
+
+    def reload_apms_from_disk(self):
+        """Reload APM data from disk."""
+        try:
+            self.apm_data = load_json(APMS_FILE)
+            self.populate_apm_combo()
+            QMessageBox.information(self, "APMs Reloaded", "APM data reloaded from disk successfully.")
+            self.logger.info("APM data reloaded from disk")
+        except Exception as exc:
+            QMessageBox.critical(self, "Reload Error", f"Failed to reload APM data: {exc}")
+            self.logger.error(f"Failed to reload APM data: {exc}")
+
+    def _write_apms_file(self):
+        """Write APM data to file."""
+        os.makedirs(os.path.dirname(APMS_FILE), exist_ok=True)
+        with open(APMS_FILE, "w", encoding="utf-8") as fh:
+            json.dump(self.apm_data, fh, indent=2)
 
 # ---------------------------------------------------------------------------
 # Entry point

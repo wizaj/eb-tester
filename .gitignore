@@ -52,7 +52,7 @@ logs/
 
 # Sensitive test data
 data/test-cards.json
-config/api_keys.json
+data/test-apms.json
 
 # Test results
 results/
