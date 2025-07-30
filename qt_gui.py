@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,  # NEW: Better for code display
     QSplitter,       # NEW: For resizable panels
     QCheckBox,      # NEW: For soft descriptor checkbox
+    QTabWidget,     # NEW: For tab-based interface
 )
 
 # Persistent config helper
@@ -499,10 +500,33 @@ class TesterWindow(QMainWindow):
         config_row.addStretch(1)
 
         # ------------------------------------------------------------------
-        # Main content split – left / right with splitter
+        # Tab-based interface
         # ------------------------------------------------------------------
+        self.tab_widget = QTabWidget()
+        outer_vbox.addWidget(self.tab_widget, stretch=1)
+
+        # Create the three tabs
+        self.create_non3ds_tab()
+        self.create_3ds_tab()
+        self.create_apms_tab()
+
+        # Set uniform tab widths
+        self.setup_uniform_tabs()
+
+        # Initial payload display for the first tab
+        self.update_payload_preview()
+
+    # ------------------------------------------------------------------
+    # Tab creation methods
+    # ------------------------------------------------------------------
+    def create_non3ds_tab(self):
+        """Create the Non-3DS (Unauthenticated) tab with existing functionality."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # Create splitter for left/right layout
         content_splitter = QSplitter(Qt.Orientation.Horizontal)
-        outer_vbox.addWidget(content_splitter, stretch=1)
+        layout.addWidget(content_splitter)
 
         # Left – card selector + payload preview
         left_widget = QWidget()
@@ -569,8 +593,6 @@ class TesterWindow(QMainWindow):
         # Now that payload editor exists, we can safely populate the card combo
         self.populate_card_combo()
 
-        # (Removed "Save Payload" button – payload is now saved together with card)
-
         # Right – PTP, run button, response
         right_widget = QWidget()
         right_box = QVBoxLayout(right_widget)
@@ -612,8 +634,62 @@ class TesterWindow(QMainWindow):
         # Set splitter proportions (60% left, 40% right)
         content_splitter.setSizes([840, 560])
 
-        # Initial payload display
-        self.update_payload_preview()
+        # Add tab to widget
+        self.tab_widget.addTab(tab, "Non-3DS (Unauthenticated)")
+
+    def create_3ds_tab(self):
+        """Create the 3DS (Authenticated) tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # Placeholder content for 3DS tab
+        placeholder = QLabel("3DS (Authenticated) Testing\n\nThis tab will contain functionality for testing 3DS authenticated payments.\n\nFeatures to be implemented:\n• 3DS authentication flow\n• Challenge handling\n• Authentication result processing")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setStyleSheet("QLabel { font-size: 14px; color: #666; }")
+        layout.addWidget(placeholder)
+        
+        # Add tab to widget
+        self.tab_widget.addTab(tab, "3DS (Authenticated)")
+
+    def create_apms_tab(self):
+        """Create the APMs (Alternative Payment Methods) tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # Placeholder content for APMs tab
+        placeholder = QLabel("Alternative Payment Methods (APMs)\n\nThis tab will contain functionality for testing alternative payment methods.\n\nFeatures to be implemented:\n• Mobile money (M-Pesa, etc.)\n• Bank transfers\n• Digital wallets\n• Local payment methods")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setStyleSheet("QLabel { font-size: 14px; color: #666; }")
+        layout.addWidget(placeholder)
+        
+        # Add tab to widget
+        self.tab_widget.addTab(tab, "APMs")
+
+    def setup_uniform_tabs(self):
+        """Set all tabs to have uniform width based on the longest tab."""
+        # Get the tab bar
+        tab_bar = self.tab_widget.tabBar()
+        
+        # Calculate the width needed for the longest tab text
+        font_metrics = tab_bar.fontMetrics()
+        max_width = 0
+        
+        # Check all tab texts to find the longest one
+        for i in range(self.tab_widget.count()):
+            tab_text = self.tab_widget.tabText(i)
+            text_width = font_metrics.horizontalAdvance(tab_text)
+            max_width = max(max_width, text_width)
+        
+        # Add padding for tab styling (borders, margins, etc.)
+        tab_width = max_width + 40  # Add 40px padding
+        
+        # Set the minimum width for each tab
+        tab_bar.setStyleSheet(f"""
+            QTabBar::tab {{
+                min-width: {tab_width}px;
+                padding: 8px 12px;
+            }}
+        """)
 
     # ------------------------------------------------------------------
     # Data helpers

@@ -125,6 +125,11 @@ The application now has a fully functional Qt-based GUI (`run.py`). The previous
 - **⚙️ Non-blocking API Calls (2024-07-27)**: `Run Test` now executes the API request in a background `QThread`, disabling the button (greyed out) until the call finishes, so the UI stays responsive.
 - **💳 Soft Descriptor Feature (2024-12-19)**: Added soft descriptor support with text input field and checkbox next to the integration key. When enabled, the soft descriptor is added to the card object in the payload. The feature includes bi-directional sync with the JSON payload editor and persistent configuration.
 - **📁 Fixed Logs Directory Path (2024-12-19)**: Fixed logs directory creation to be relative to the script's location rather than the current working directory. Now logs will always be created in the project directory regardless of where the script is called from.
+- **📑 Tab-Based UI Implementation (2024-12-19)**: Refactored the application to use a tab-based interface with three tabs:
+  - **Non-3DS (Unauthenticated)**: Contains all existing functionality for testing unauthenticated card payments
+  - **3DS (Authenticated)**: Placeholder tab for future 3DS authentication testing functionality
+  - **APMs**: Placeholder tab for future Alternative Payment Methods testing functionality
+  The existing card testing interface has been moved to the first tab, maintaining all current functionality while preparing for future feature expansion.
 
 ## MVP Completion Status
 1. ✅ Add API configuration UI (base URL, integration key)
