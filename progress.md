@@ -111,8 +111,8 @@ From ptp-list.txt analysis:
 - **Countries**: ng (Nigeria), ke (Kenya), za (South Africa), eg (Egypt)
 - **Features**: 3ds, otp, cof, hosted-url, recurrent, sandbox
 
-## Current Status - MVP Complete
-The application now has a fully functional Qt-based GUI (`run.py`). The previous Tkinter implementation has been removed, resolving macOS display issues.
+## Current Status - MVP Complete + 3DS Feature
+The application now has a fully functional Qt-based GUI (`run.py`) with both Non-3DS and 3DS testing capabilities. The previous Tkinter implementation has been removed, resolving macOS display issues. The 3DS tab provides the same UI as the Non-3DS tab but sends API calls with `auto_capture: false` and `threeds_force: true` parameters.
 
 ## Recent Updates
 - **✅ First-Time User Support**: Added automatic creation of `test-cards.json` with dummy data if the file doesn't exist. New users will get test cards for all supported countries (NG, KE, ZA, EG) with proper API payloads.
@@ -130,6 +130,17 @@ The application now has a fully functional Qt-based GUI (`run.py`). The previous
   - **3DS (Authenticated)**: Placeholder tab for future 3DS authentication testing functionality
   - **APMs**: Placeholder tab for future Alternative Payment Methods testing functionality
   The existing card testing interface has been moved to the first tab, maintaining all current functionality while preparing for future feature expansion.
+- **🔐 3DS (Authenticated) Implementation (2024-12-19)**: Implemented the 3DS tab with full functionality mirroring the Non-3DS tab but with different API parameters:
+  - **auto_capture**: false (no automatic capture)
+  - **threeds_force**: true (force 3DS authentication)
+  - Complete UI replication with separate card management, payload editing, and API testing
+  - Independent card selection, PTP filtering, and response handling
+  - All existing features (soft descriptor, logging, error handling) work in 3DS mode
+  - **📊 Dual Payload Support**: Updated data structure to support both `custom_payload` (Non-3DS) and `custom_payload_3ds` (3DS) fields in test-cards.json
+  - **🔄 Tab-Specific Payloads**: App now uses the appropriate payload based on active tab - Non-3DS tab uses `custom_payload`, 3DS tab uses `custom_payload_3ds`
+  - **🔐 3DS Authentication Integration**: Added "Authenticate 3DS in Browser" button in the 3DS tab that automatically detects 3DS redirect URLs in API responses and opens them in the user's default browser
+  - **💾 PTP Selection Memory**: App now remembers the last selected PTP for each tab (Non-3DS and 3DS) and restores them on startup
+  - **💳 Card Selection Memory**: App now remembers the last selected card for each tab and restores them on startup
 
 ## MVP Completion Status
 1. ✅ Add API configuration UI (base URL, integration key)
